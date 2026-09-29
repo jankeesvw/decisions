@@ -1,0 +1,1112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Make the Call</title>
+<meta name="theme-color" content="#0b0b0b">
+<meta name="description" content="A walk through the 37signals Guide to Making Decisions: 38 questions, one card at a time.">
+<style>
+  /* Always dark */
+  :root {
+    --paper: #0b0b0b;
+    --card: #151515;
+    --ink: #ffffff;
+    --muted: #a3a3a3;
+    --line: #353535;
+    --trail: #ffffff;
+    --walk: #3a3a3a;
+    --marker: #ffffff;
+    --marker-ink: #000000;
+    --done: #262626;
+    --focus: #7aa7ff;
+    --display: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --body: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 17px/1.5 var(--body); overflow: hidden; -webkit-font-smoothing: antialiased;
+    display: flex; flex-direction: column;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* Top bar */
+  .bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;
+    padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--card);
+    position: relative; z-index: 2;
+  }
+  .brand { font: 800 19px/1 var(--display); letter-spacing: -.02em; white-space: nowrap; }
+  .brand span { display: none; }
+  .deciding { flex: 1 1 200px; min-width: 0; color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .deciding b { color: var(--ink); font-weight: 600; }
+  .stats { display: flex; gap: 14px; align-items: center; font: 500 13px/1 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stats .late { color: var(--ink); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+  .tools { display: flex; gap: 8px; }
+  .btn {
+    border: 1px solid var(--ink); background: var(--card); border-radius: 4px;
+    padding: 7px 12px; min-height: 38px; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .btn:hover { background: var(--done); }
+  .btn.primary, .btn.marker { background: var(--ink); color: var(--paper); border-color: var(--ink); font-weight: 600; }
+  .btn.primary:hover, .btn.marker:hover { opacity: .85; background: var(--ink); }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--ink); background: transparent; text-decoration: underline; }
+
+  /* Map viewport */
+  .viewport {
+    position: relative; flex: 1; overflow: hidden; cursor: default;
+    background-color: var(--paper);
+  }
+  .viewport.map { cursor: grab; touch-action: none; }
+  .viewport.dragging { cursor: grabbing; }
+  .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+  .world.animate { transition: transform .65s cubic-bezier(.3, .7, .2, 1); }
+  .trail { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+  .trail path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .trail .all { stroke: var(--walk); stroke-width: 4; stroke-dasharray: 1 14; }
+  .trail .walked { stroke: var(--trail); stroke-width: 4; }
+
+  .credit {
+    padding: 10px 20px; border-top: 1px solid var(--line); background: var(--card);
+    font-size: 12px; line-height: 1.4; color: var(--muted); position: relative; z-index: 2;
+  }
+  .credit a { color: var(--ink); }
+  .hint { position: absolute; right: 16px; bottom: 12px; font-size: 13px; color: var(--muted); pointer-events: none; }
+
+  /* Stations */
+  .card {
+    position: absolute; padding: 28px 30px 24px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+    background: var(--card); border: 1px solid var(--line); border-radius: 4px;
+    display: flex; flex-direction: column; gap: 14px;
+    transition: opacity .4s, border-color .3s, background-color .3s;
+  }
+  .viewport:not(.map) .card:not(.current) { cursor: pointer; border-color: var(--walk); }
+  .viewport:not(.map) .card:not(.current) > * { opacity: .25; transition: opacity .4s; }
+  .viewport:not(.map) .card:not(.current) * { pointer-events: none; }
+  .card.current { border-color: var(--muted); }
+  .card-top { display: flex; align-items: baseline; gap: 8px; font: 500 13px/1 var(--mono); color: var(--muted); }
+  .card-top .n { font: 800 15px/1 var(--mono); color: var(--ink); }
+  .card-top .state { margin-left: auto; font-family: var(--body); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+  .card.answered .state { color: var(--ink); font-weight: 700; }
+  .q { margin: 0; font: 800 27px/1.2 var(--display); letter-spacing: -.02em; text-wrap: balance; }
+  .tip {
+    margin: 0; padding: 2px 0 2px 14px; border-left: 3px solid var(--ink);
+    font-size: 15px; line-height: 1.45;
+  }
+  .tip p { margin: 0; }
+  .tip cite { display: block; margin-top: 4px; font-style: normal; font-size: 12px; color: var(--muted); }
+  .tip cite a { color: inherit; }
+  textarea {
+    flex: 1; min-height: 90px; width: 100%; resize: none; border: 1px solid var(--line); border-radius: 4px;
+    background: var(--paper); padding: 10px 12px; line-height: 1.45; font-size: 17px;
+  }
+  textarea:focus, input[type=text]:focus { outline: none; border-color: var(--ink); }
+  .card-actions { display: flex; gap: 8px; align-items: center; margin-top: auto; }
+  .card-actions .spacer { flex: 1; }
+  .card.end .card-actions { flex-wrap: wrap; }
+  .kbd { font: 500 11px/1 var(--mono); color: var(--muted); }
+
+  /* Shortcuts to the finish */
+  .btn.exit { align-self: flex-start; border-style: dashed; white-space: normal; text-align: left; }
+  .exit-tag { display: none; font: 700 30px/1 var(--body); }
+  .far .exit-tag { display: block; margin-top: auto; }
+  .exit-note { margin: 0; padding: 8px 12px; border: 1px dashed var(--ink); border-radius: 4px; font-size: 15px; }
+  .exit-note:empty { display: none; }
+
+  /* Dictation */
+  .mic svg { width: 16px; height: 16px; flex: none; }
+  .mic.listening { background: #d0021b; border-color: #d0021b; color: #fff; }
+  [hidden] { display: none !important; }
+  /* While dictating, the Dictate button splits into Reset and Next at the same width */
+  .micbox { display: inline-flex; width: 196px; }
+  .micbox > .mic { width: 100%; }
+  .mic-live { display: flex; width: 100%; }
+  .mic-live .btn { flex: 1; padding-inline: 6px; border-color: #d0021b; }
+  .mic-live .live-reset { color: #ff6b6b; border-radius: 4px 0 0 4px; }
+  .mic-live .live-next { background: #d0021b; color: #fff; font-weight: 600; border-radius: 0 4px 4px 0; margin-left: -1px; }
+  .mic-live .live-next::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pulse 1s ease-in-out infinite; }
+  .mic-live .live-reset:hover { background: transparent; text-decoration: underline; }
+  .mic-live .live-next:hover { background: #b00017; }
+  .mic.listening svg { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .input-row { display: flex; gap: 8px; }
+  .input-row input { flex: 1; min-width: 0; }
+  .input-row .mic { flex: none; width: 44px; padding: 0; }
+  .dictation-msg { margin: 0; font-size: 13px; color: var(--muted); }
+  .dictation-msg:empty { display: none; }
+  .no-speech .mic { display: none; }
+
+  .card.start h1 { margin: 0; font: 800 44px/1 var(--display); letter-spacing: -.035em; }
+  .card.start .lede { margin: 0; font-size: 17px; }
+  .card.start .lede a { color: var(--ink); }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field > span, .field legend { font-weight: 700; font-size: 15px; padding: 0; }
+  input[type=text] { border: 1px solid var(--line); border-radius: 4px; background: var(--paper); padding: 9px 12px; width: 100%; font-size: 17px; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .choices label { cursor: pointer; }
+  .langs { margin-left: auto; display: flex; gap: 14px; font: 500 14px/1 var(--body); }
+  .langs label { cursor: pointer; }
+  .langs input { position: absolute; opacity: 0; pointer-events: none; }
+  .langs span { color: var(--muted); padding-bottom: 3px; border-bottom: 2px solid transparent; }
+  .langs input:checked + span { color: var(--ink); border-bottom-color: var(--ink); }
+  .langs input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 3px; }
+  .choices input { position: absolute; opacity: 0; pointer-events: none; }
+  .choices span { display: inline-block; border: 1px solid var(--ink); border-radius: 4px; padding: 6px 12px; font-size: 15px; }
+  .choices input:checked + span { background: var(--ink); color: var(--card); border-color: var(--ink); }
+  .choices input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .sources { font-size: 12px; color: var(--muted); margin: 0; }
+  .sources a { color: inherit; }
+  .card.end .summary { font: 500 13px/1.4 var(--mono); color: var(--muted); margin: 0; }
+  .copied { font-size: 14px; font-weight: 600; }
+
+  /* Zoomed out: cards become map tiles */
+  .far .card { padding: 40px; overflow: hidden; border: 6px solid var(--line); gap: 24px; }
+  .far .card .tip, .far .card textarea, .far .card .card-actions, .far .card .lede,
+  .far .card .field, .far .card .sources, .far .card .summary, .far .card .dictation-msg,
+  .far .card .btn.exit, .far .card .exit-note { display: none; }
+  .far .card-top { font-size: 30px; color: inherit; }
+  .far .card-top > span:not(.n) { display: none; }
+  .far .card-top .n { font: 800 150px/.9 var(--display); color: inherit; letter-spacing: -.04em; }
+  .far .q { font-size: 58px; line-height: 1.1; letter-spacing: -.02em;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 7; overflow: hidden; }
+  .far .card.start h1 { font-size: 80px; }
+  .far .exit-tag { font-size: 40px; }
+  .far .card:has(.exit-tag) .q { -webkit-line-clamp: 5; }
+  /* Answered: solid black. Skipped: dashed. Not reached yet: light grey outline. */
+  .far .card.answered { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .far .card.skipped { border-style: dashed; border-color: var(--muted); }
+  /* Questions after a shortcut you took: fade the content, keep the card opaque so the trail stays hidden */
+  .far .card.bypassed { border-color: var(--walk); border-style: solid; background: var(--card); color: var(--ink); }
+  .far .card.bypassed > * { opacity: .3; }
+  .far .card.current { outline: 16px solid var(--ink); outline-offset: 18px; }
+  .far .card { cursor: pointer; }
+  .far .card:hover { border-color: var(--ink); }
+  .pin {
+    position: absolute; display: none; transform: translate(-50%, -100%);
+    background: var(--marker); color: var(--marker-ink); font: 800 56px/1 var(--display);
+    padding: 18px 30px; border-radius: 6px; white-space: nowrap; pointer-events: none;
+  }
+  .pin::after { content: ""; position: absolute; left: 50%; bottom: -22px; margin-left: -22px; border: 22px solid transparent; border-bottom: 0; border-top-color: var(--marker); }
+  .far .pin { display: block; }
+
+  .credit .short { display: none; }
+  @media (max-width: 640px) {
+    .bar { padding: 8px 12px; gap: 6px 10px; }
+    /* Row 1: title and buttons. Row 2: progress, timer and the decision. */
+    .brand { order: 1; flex: 1; font-size: 17px; }
+    .tools { order: 2; }
+    .stats { order: 3; gap: 10px; font-size: 12px; }
+    .stats .wide { display: none; }
+    .deciding { order: 4; flex: 1 1 0; font-size: 13px; }
+    .hint { display: none; }
+    .tools .btn { padding: 6px 10px; }
+    .card { padding: 20px 18px 16px; gap: 12px; }
+    .q { font-size: 22px; }
+    .card.start h1 { font-size: 32px; }
+    .kbd { display: none; }
+    .card-actions .btn { min-height: 44px; }
+    .card-actions .spacer { display: none; }
+    .micbox { width: auto; flex: 1; min-width: 0; }
+    .mic-live .btn { font-size: 13px; padding-inline: 4px; }
+    .credit { padding: 6px 12px; font-size: 11px; }
+    .credit .long { display: none; }
+    .credit .short { display: inline; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .world.animate { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand"><span>?</span><b class="name">Make the Call</b></div>
+  <div class="deciding" id="deciding">Answer questions from the 37signals guide, one question at a time.</div>
+  <div class="stats">
+    <span id="progress">0 / 38 answered</span>
+    <span id="timer" title="Jason and David say most of their calls take about five minutes">0:00</span>
+  </div>
+  <div class="tools">
+    <button class="btn" id="zoomBtn" type="button">Zoom out</button>
+    <button class="btn" id="callBtn" type="button">Make the call</button>
+  </div>
+</header>
+
+<main class="viewport" id="viewport">
+  <div class="world animate" id="world">
+    <svg class="trail" id="trail"><path class="all" id="trailAll"/><path class="walked" id="trailWalked"/></svg>
+    <div class="pin" id="pin">You are here</div>
+  </div>
+  <div class="hint" id="hint">Z zooms out · Ctrl/⌘+Enter goes to the next question</div>
+</main>
+
+<footer class="credit">
+  <span class="short" id="footShort"></span>
+  <span class="long" id="footLong"></span>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var GUIDE = "https://37signals.com/how-we-make-decisions";
+  var EPISODE = "https://37signals.com/podcast/one-way-doors/";
+  var SITE = "https://37signals.com";
+  var MADE_EN = " Made by " + '<a href="https://jankeesvw.com" target="_blank" rel="noopener">jankeesvw</a>' + " at " + '<a href="https://wbso.ai" target="_blank" rel="noopener">WBSO.ai</a>' + ".";
+  var MADE_NL = " Gemaakt door " + '<a href="https://jankeesvw.com" target="_blank" rel="noopener">jankeesvw</a>' + " bij " + '<a href="https://wbso.ai" target="_blank" rel="noopener">WBSO.ai</a>' + ".";
+  function link(href, text) { return '<a href="' + href + '" target="_blank" rel="noopener">' + text + '</a>'; }
+
+  // The 38 questions, in the order they appear in The 37signals Guide to Making Decisions.
+  // English is the original; Dutch is our own unofficial translation.
+  var QUESTIONS = {
+    en: [
+      "Why are we deciding anything at all? Does a decision actually need to be made here?",
+      "Is the right person making this decision? Not the right role, but the right person with the right information, context, and insight? Who’s merely chiming in?",
+      "If we remove the immediate impact, how do we think we’ll feel about this decision a year from now?",
+      "Why hasn’t this decision been made already? Why didn’t we decide before?",
+      "What’s taking so long to make this decision? Why are we hesitating? What does that reveal?",
+      "Why would someone else make a different decision? What’s the other side, or two or three, look like?",
+      "Can we make this decision smaller? Can we take one big decision and turn it into three smaller ones?",
+      "How easily can we reverse the decision?",
+      "What was our first instinct on this decision? Are we now just walking around in circles trying to justify that gut reaction with data?",
+      "What would happen if we just didn’t make the decision?",
+      "What happened the last time we made a decision like this?",
+      "What are we looking forward to after the decision is made? What are we afraid of?",
+      "How can we make this decision easier? What parts can we eliminate from consideration?",
+      "Is there even a wrong decision?",
+      "Do we anticipate making a different decision if we wait until tomorrow morning to make it?",
+      "Is any decision better than no decision, or is no decision better than any decision?",
+      "What other decisions will be impacted by this decision?",
+      "Will this decision eliminate the need to make other decisions, or will it create the necessity to make even more decisions?",
+      "What missing information would lead to making a different decision?",
+      "Will this decision make more work for people that don’t have extra time for that work? Or will it eliminate work?",
+      "Could this decision be a good one for someone else to practice making?",
+      "When do we have to decide?",
+      "Will this be a one-and-done decision, or will this be a repeating decision?",
+      "Is anyone outside the company depending on this, or is this a decision of our own making?",
+      "How does this decision impact customers vs. impact us?",
+      "Is this primarily a data-based decision, or an intuition, gut-based decision?",
+      "Would another opinion help or hinder?",
+      "If we were forced to make a decision right this second, what would it be?",
+      "Where do we think we’d be today if we made this decision 90 days ago?",
+      "Is there anything in this decision we’d regret if we didn’t take X, Y, or Z into consideration?",
+      "Do you even care which way this goes? If not, why are you involved?",
+      "When and how will we know whether the decision was the right one, or if it even mattered?",
+      "When the consequences of our decision appear, are they likely to be visible with the naked eye or do they require a microscope to detect? If the latter, does it even matter?",
+      "What principles are we bending if we make this decision?",
+      "Are we asking multiple people to make a decision that one person should be making?",
+      "Is the return on effort worth it?",
+      "What gets easier if we make this decision? What gets harder? Will easier remain easier in the long term, or is it short-term easy but long-term hard? And vice versa.",
+      "In the end, is this about money?"
+    ],
+    nl: [
+      "Waarom beslissen we hier eigenlijk iets? Moet hier echt een beslissing genomen worden?",
+      "Neemt de juiste persoon deze beslissing? Niet de juiste rol, maar de juiste persoon, met de juiste informatie, context en inzichten? Wie praat alleen maar mee?",
+      "Als we de directe impact wegdenken, hoe denken we dan over een jaar over deze beslissing?",
+      "Waarom is deze beslissing nog niet genomen? Waarom hebben we niet eerder besloten?",
+      "Waarom duurt het zo lang om deze beslissing te nemen? Waarom aarzelen we? Wat zegt dat?",
+      "Waarom zou iemand anders een andere beslissing nemen? Hoe ziet de andere kant eruit, of de twee of drie andere kanten?",
+      "Kunnen we deze beslissing kleiner maken? Kunnen we van één grote beslissing drie kleinere maken?",
+      "Hoe makkelijk kunnen we deze beslissing terugdraaien?",
+      "Wat was ons eerste instinct bij deze beslissing? Lopen we nu in rondjes om dat onderbuikgevoel met data te rechtvaardigen?",
+      "Wat zou er gebeuren als we de beslissing gewoon niet namen?",
+      "Wat gebeurde er de vorige keer dat we zo’n beslissing namen?",
+      "Waar kijken we naar uit als de beslissing genomen is? Waar zijn we bang voor?",
+      "Hoe kunnen we deze beslissing makkelijker maken? Welke delen kunnen we buiten beschouwing laten?",
+      "Bestaat er eigenlijk wel een verkeerde beslissing?",
+      "Verwachten we een andere beslissing te nemen als we wachten tot morgenochtend?",
+      "Is elke beslissing beter dan geen beslissing, of is geen beslissing beter dan welke beslissing ook?",
+      "Welke andere beslissingen worden door deze beslissing geraakt?",
+      "Maakt deze beslissing andere beslissingen overbodig, of moeten we daardoor juist nog meer beslissingen nemen?",
+      "Welke ontbrekende informatie zou tot een andere beslissing leiden?",
+      "Levert deze beslissing extra werk op voor mensen die daar geen tijd voor hebben? Of haalt ze juist werk weg?",
+      "Zou dit een goede beslissing zijn voor iemand anders om mee te oefenen?",
+      "Wanneer moeten we beslissen?",
+      "Is dit een eenmalige beslissing, of een die steeds terugkomt?",
+      "Is iemand buiten het bedrijf hiervan afhankelijk, of is dit een beslissing die we onszelf hebben opgelegd?",
+      "Wat doet deze beslissing met klanten, en wat met ons?",
+      "Is dit vooral een beslissing op basis van data, of een beslissing op intuïtie en gevoel?",
+      "Helpt een extra mening, of zit die juist in de weg?",
+      "Als we nu, op dit moment, moesten beslissen, wat zou het dan worden?",
+      "Waar denken we dat we nu zouden staan als we deze beslissing 90 dagen geleden hadden genomen?",
+      "Is er iets aan deze beslissing waar we spijt van zouden krijgen als we X, Y of Z niet meewogen?",
+      "Kan het je eigenlijk schelen welke kant dit op gaat? Zo niet, waarom ben je er dan bij betrokken?",
+      "Wanneer en hoe weten we of dit de juiste beslissing was, of dat het überhaupt uitmaakte?",
+      "Als de gevolgen van onze beslissing zichtbaar worden, zijn ze dan met het blote oog te zien, of heb je een microscoop nodig om ze te ontdekken? In dat laatste geval: maakt het dan wel uit?",
+      "Welke principes buigen we als we deze beslissing nemen?",
+      "Vragen we meerdere mensen om een beslissing te nemen die één persoon zou moeten nemen?",
+      "Is de opbrengst de moeite waard?",
+      "Wat wordt er makkelijker als we deze beslissing nemen? Wat wordt er moeilijker? Blijft makkelijk ook op lange termijn makkelijk, of is het op korte termijn makkelijk en op lange termijn moeilijk? En andersom.",
+      "Gaat dit uiteindelijk om geld?"
+    ]
+  };
+
+  // Quotes from REWORK episode 201, "One-way Doors", keyed by question number: [speaker, timestamp, English, Dutch].
+  var TIPS = {
+    3: ["Jason Fried", "07:22",
+      "Pretty much every decision you make in the business doesn’t really matter. It could have gone a hundred different ways and would’ve turned out the same way or differently.",
+      "Eigenlijk maakt bijna elke beslissing die je in het bedrijf neemt niet echt uit. Het had op honderd verschillende manieren kunnen gaan en was dan hetzelfde of anders uitgepakt."],
+    5: ["David Heinemeier Hansson", "04:21",
+      "If we can’t make a decision quite quickly, it’s usually because there’s something right under the surface. It’s not lack of information.",
+      "Als we niet vrij snel een beslissing kunnen nemen, komt dat meestal doordat er iets vlak onder de oppervlakte zit. Het is geen gebrek aan informatie."],
+    6: ["David Heinemeier Hansson", "10:57",
+      "Yeah, I probably would’ve rolled it the other way, but who cares? Let’s just try it your way. And if it’s not working, reality’s going to tell the tale and we will just adjust.",
+      "Ja, ik had het waarschijnlijk anders gedaan, maar wat maakt het uit? Laten we het gewoon op jouw manier proberen. En als het niet werkt, laat de werkelijkheid dat wel zien en sturen we gewoon bij."],
+    7: ["Jason Fried", "12:11",
+      "Do you know how many decisions you’re making? You’re making a thousand decisions. … If you had to really think about every decision you make, you’d get nowhere.",
+      "Weet je hoeveel beslissingen je neemt? Je neemt duizend beslissingen. … Als je over elke beslissing echt moest nadenken, kwam je nergens."],
+    8: ["Jason Fried", "05:49",
+      "We just make decisions and we go for it because most everything can be reversed anyway.",
+      "We nemen gewoon beslissingen en gaan ervoor, want bijna alles kan toch weer worden teruggedraaid."],
+    9: ["David Heinemeier Hansson", "03:37",
+      "Even when the stakes are as high as they can get, the decision usually comes quite quickly because there is this pre-processing that’s happening in your gut.",
+      "Zelfs als er zoveel op het spel staat als maar kan, komt de beslissing meestal vrij snel, omdat je onderbuik het al voor een groot deel heeft voorbewerkt."],
+    11: ["Jason Fried", "16:41",
+      "I’m not going to dwell on them. I’m not going to … do a postmortem. … Learn moving forward. Don’t look back.",
+      "Ik ga er niet over piekeren. Ik ga niet … een postmortem doen. … Leer terwijl je vooruitgaat. Kijk niet achterom."],
+    12: ["David Heinemeier Hansson", "04:21",
+      "It’s some fear of some thing that if you just address that directly, the decision becomes obvious.",
+      "Het is angst voor iets, en als je dat gewoon direct aanpakt, wordt de beslissing vanzelfsprekend."],
+    16: ["Jason Fried", "13:07",
+      "I hate stopping the business. We’re going to keep doing things and we’re going to make calls as we go.",
+      "Ik haat het om het bedrijf stil te zetten. We blijven dingen doen en we nemen beslissingen onderweg."],
+    19: ["David Heinemeier Hansson", "08:20",
+      "Whatever the decision is, it’s usually one that asks reality for the check. What’s going to happen if we do this? And then we will adjust.",
+      "Wat de beslissing ook is, meestal leg je de vraag gewoon aan de werkelijkheid voor. Wat gebeurt er als we dit doen? En dan sturen we bij."],
+    22: ["Jason Fried", "05:49",
+      "When we make a call, we literally will have a five minute conversation about it.",
+      "Als we een beslissing nemen, hebben we daar letterlijk een gesprek van vijf minuten over."],
+    26: ["David Heinemeier Hansson", "09:09",
+      "So much of the decision making process is deliberation for show. … So if it goes wrong, can’t blame me. I did the math. I did the spreadsheet.",
+      "Zoveel van het besluitvormingsproces is overleggen voor de show. … Dus als het misgaat, kun je het mij niet verwijten. Ik heb het doorgerekend. Ik heb de spreadsheet gemaakt."],
+    28: ["Jason Fried", "06:36",
+      "If we decided at some point to sell the whole damn thing, honestly, it’d probably be a 15 minute conversation.",
+      "Als we ooit zouden besluiten om de hele boel te verkopen, zou dat eerlijk gezegd waarschijnlijk een gesprek van een kwartier zijn."],
+    32: ["David Heinemeier Hansson", "08:05",
+      "While the individual call is not that important, the net sum of all the calls really are, and that’s the moving average that we’re optimizing.",
+      "De afzonderlijke beslissing is niet zo belangrijk, maar de optelsom van alle beslissingen wel, en dat is het voortschrijdend gemiddelde waar we op sturen."],
+    33: ["David Heinemeier Hansson", "15:05",
+      "The normal thing is that the thing is moving. If you feel like you are stuck in this staccato moment, you got to change something.",
+      "Het normale is dat het ding in beweging is. Als je het gevoel hebt dat je vastzit in zo’n hortend moment, moet je iets veranderen."],
+    38: ["David Heinemeier Hansson", "04:21",
+      "It’d be nice to have a couple million bucks in our bank account and therefore the confidence to go all the way and not be tempted by the VCs next month.",
+      "Het zou fijn zijn om een paar miljoen op de bank te hebben, en daardoor het vertrouwen om helemaal door te gaan zonder volgende maand in de verleiding te komen door de investeerders."]
+  };
+
+  // What you can land on at the finish. Stored by key so a language switch keeps the choice.
+  var CALLS = ["do", "dont", "none", "handoff", "later"];
+  var OLD_CALLS = { "Do it": "do", "Don’t do it": "dont", "No decision needed": "none", "Don’t decide at all": "none", "Hand it to someone else": "handoff", "Decide later": "later" };
+
+  // Questions where one answer settles it. Each offers a shortcut straight to the finish.
+  var EXITS = {
+    1: { call: "none", en: ["No, nothing needs deciding", "No decision actually needs to be made here."],
+      nl: ["Nee, er valt niets te beslissen", "Hier hoeft eigenlijk geen beslissing genomen te worden."] },
+    2: { call: "handoff", en: ["No, someone else should decide", "Someone else has the information, context and insight to decide this."],
+      nl: ["Nee, iemand anders moet dit beslissen", "Iemand anders heeft de informatie, context en inzichten om dit te beslissen."] },
+    14: { call: "", en: ["No, there’s no wrong choice", "There’s no wrong decision here, so just pick one."],
+      nl: ["Nee, er is geen verkeerde keuze", "Er is hier geen verkeerde beslissing, dus kies er gewoon een."] },
+    15: { call: "", en: ["No, I’d decide the same tomorrow", "Waiting until tomorrow won’t change the answer, so decide now."],
+      nl: ["Nee, morgen kies ik hetzelfde", "Wachten tot morgen verandert het antwoord niet, dus beslis nu."] },
+    21: { call: "handoff", en: ["Yes, let someone else practice", "This is a good decision for someone else to practice making."],
+      nl: ["Ja, laat iemand anders oefenen", "Dit is een goede beslissing voor iemand anders om mee te oefenen."] },
+    22: { call: "later", en: ["Not yet, it can wait", "It doesn’t have to be decided now."],
+      nl: ["Nog niet, het kan wachten", "Dit hoeft nu nog niet besloten te worden."] },
+    31: { call: "handoff", en: ["No, I don’t care which way it goes", "You don’t care which way this goes, so you don’t need to be involved."],
+      nl: ["Nee, het maakt me niet uit", "Het maakt je niet uit welke kant dit op gaat, dus je hoeft er niet bij betrokken te zijn."] },
+    35: { call: "handoff", en: ["Yes, one person should decide", "One person should make this decision, not a group."],
+      nl: ["Ja, één persoon moet dit beslissen", "Eén persoon moet deze beslissing nemen, geen groep."] }
+  };
+
+  // Every other piece of text on the page.
+  var TEXT = {
+    en: {
+      deciding: "Deciding:",
+      answered: "answered",
+      timerTitle: "Jason and David say most of their calls take about five minutes",
+      zoomOut: "Zoom out", zoomIn: "Zoom in", makeCall: "Go to finish",
+      pin: "You are here",
+      hint: "Z zooms out · Ctrl/⌘+Enter goes to the next question",
+      footShort: "Unofficial companion to " + link(GUIDE, "The 37signals Guide to Making Decisions") + " by Jason Fried. Questions and quotes © " + link(SITE, "37signals") + "." + MADE_EN,
+      footLong: "All questions come from " + link(GUIDE, "The 37signals Guide to Making Decisions") + " by Jason Fried. Quotes are from the " + link(EPISODE, "REWORK podcast episode “One-way Doors”") + " with Jason Fried and David Heinemeier Hansson. Questions and quotes © " + link(SITE, "37signals") + ". This is an unofficial companion, not made by or affiliated with 37signals." + MADE_EN,
+      langLegend: "Language",
+      start: "Start",
+      lede: "A walk through " + link(GUIDE, "The 37signals Guide to Making Decisions") + " by Jason Fried. The questions aren’t a checklist: skip what doesn’t apply and make the call as soon as you know.",
+      whatDeciding: "What are you deciding?",
+      decisionPlaceholder: "e.g. Should we raise prices for new customers?",
+      doorLegend: "One-way or two-way door?",
+      doorHelp: "One-way doors you can’t walk back; two-way doors you can.",
+      doorOne: "One-way: no way back", doorTwo: "Two-way: we can walk it back", doorUnsure: "Not sure yet",
+      startQuest: "Start the quest", startOver: "Start over", clearAll: "Clear everything?",
+      yourAnswer: "Your answer",
+      answerPlaceholder: "Your answer. A sentence is plenty, or skip it.",
+      back: "Back", skip: "Skip", next: "Next",
+      dictate: "Dictate", stop: "Stop", stopDictation: "Stop dictation", redo: "Reset",
+      finishNow: "finish now →",
+      exitTag: "↘ Shortcut to finish",
+      stateAnswered: "Answered", stateSkipped: "Skipped",
+      cite: function (who, ts) { return who + ", REWORK " + link(EPISODE, "“One-way Doors”") + ", " + ts; },
+      finish: "Finish", makeTheCall: "Make the call.", whereLand: "Where did you land?",
+      calls: { do: "Do it", dont: "Don’t do it", none: "No decision needed", handoff: "Hand it to someone else", later: "Decide later" },
+      callLabel: "The call, in one sentence",
+      callPlaceholder: "The call, in one sentence. And what would make you change it.",
+      copy: "Copy as Markdown", copied: "Copied", pressCopy: "Press Ctrl+C to copy",
+      exitNote: function (q, why) { return "Shortcut from question " + q + ": " + why; },
+      summary: function (a, n, t) { return a + " of " + n + " questions answered in " + t + "."; },
+      doors: { "one-way": "Door: one-way.", "two-way": "Door: two-way.", "unsure": "Door: not sure." },
+      needHttps: "Dictation needs HTTPS. Your keyboard’s microphone key works too.",
+      noSpeech: "This browser has no built-in dictation. Your keyboard’s microphone key works too.",
+      listening: "Listening", onDevice: " on this device",
+      tapNextRedo: ". Tap Next when you’re done, or Reset to start this answer again.",
+      tapMicStop: ". Tap the microphone again to stop.",
+      cleared: "Cleared. Keep talking.",
+      errors: {
+        "not-allowed": "The microphone is blocked. Allow it for this site in your browser settings.",
+        "no-speech": "Didn’t hear anything. Tap Dictate and try again.",
+        "network": "Dictation needs a network connection in this browser.",
+        "audio-capture": "No microphone found.",
+        "language-not-supported": "This browser can’t dictate in that language."
+      },
+      stopped: function (e) { return "Dictation stopped (" + e + ")."; },
+      cantStart: "Couldn’t start dictation.",
+      mdUntitled: "Untitled decision",
+      mdEarly: function (q, why) { return "Finished early at question " + q + ": " + why; },
+      mdTime: function (t, a, n) { return "Time on the quest: " + t + ". Answered " + a + " of " + n + " questions."; },
+      mdCall: "## The call", mdAnswers: "## Answers",
+      mdGuide: "Questions from The 37signals Guide to Making Decisions by Jason Fried (37signals): " + GUIDE,
+      mdQuotes: "Quotes from REWORK “One-way Doors” (37signals): " + EPISODE
+    },
+    nl: {
+      deciding: "Beslissing:",
+      answered: "beantwoord",
+      timerTitle: "Jason en David zeggen dat de meeste beslissingen bij hen zo’n vijf minuten duren",
+      zoomOut: "Uitzoomen", zoomIn: "Inzoomen", makeCall: "Naar de finish",
+      pin: "Je bent hier",
+      hint: "Z zoomt uit · Ctrl/⌘+Enter gaat naar de volgende vraag",
+      footShort: "Onofficiële companion bij " + link(GUIDE, "The 37signals Guide to Making Decisions") + " van Jason Fried. Vragen en citaten © " + link(SITE, "37signals") + ", vertaling onofficieel." + MADE_NL,
+      footLong: "Alle vragen komen uit " + link(GUIDE, "The 37signals Guide to Making Decisions") + " van Jason Fried. De citaten komen uit de " + link(EPISODE, "REWORK-podcastaflevering “One-way Doors”") + " met Jason Fried en David Heinemeier Hansson. Vragen en citaten © " + link(SITE, "37signals") + ". De Nederlandse vertaling is onofficieel en niet van 37signals. Dit is een onofficiële companion, niet gemaakt door of verbonden aan 37signals." + MADE_NL,
+      langLegend: "Taal",
+      start: "Start",
+      lede: "Een wandeling door " + link(GUIDE, "The 37signals Guide to Making Decisions") + " van Jason Fried, onofficieel vertaald. De vragen zijn geen checklist: sla over wat niet van toepassing is en hak de knoop door zodra je het weet.",
+      whatDeciding: "Wat ga je beslissen?",
+      decisionPlaceholder: "bijv. Verhogen we de prijzen voor nieuwe klanten?",
+      doorLegend: "Eenrichtingsdeur of tweerichtingsdeur?",
+      doorHelp: "Door een eenrichtingsdeur kun je niet meer terug, door een tweerichtingsdeur wel.",
+      doorOne: "Eenrichting: geen weg terug", doorTwo: "Tweerichting: we kunnen terug", doorUnsure: "Weet ik nog niet",
+      startQuest: "Begin de quest", startOver: "Opnieuw beginnen", clearAll: "Alles wissen?",
+      yourAnswer: "Jouw antwoord",
+      answerPlaceholder: "Jouw antwoord. Eén zin is genoeg, of sla hem over.",
+      back: "Terug", skip: "Overslaan", next: "Volgende",
+      dictate: "Dicteer", stop: "Stop", stopDictation: "Stop met dicteren", redo: "Opnieuw",
+      finishNow: "nu afronden →",
+      exitTag: "↘ Afslag naar finish",
+      stateAnswered: "Beantwoord", stateSkipped: "Overgeslagen",
+      cite: function (who, ts) { return who + ", REWORK " + link(EPISODE, "“One-way Doors”") + ", " + ts + " (vertaald)"; },
+      finish: "Finish", makeTheCall: "Hak de knoop door.", whereLand: "Waar kom je uit?",
+      calls: { do: "Doen", dont: "Niet doen", none: "Geen beslissing nodig", handoff: "Aan iemand anders overlaten", later: "Later beslissen" },
+      callLabel: "Het besluit, in één zin",
+      callPlaceholder: "Het besluit in één zin. En wat je van gedachten zou doen veranderen.",
+      copy: "Kopieer als Markdown", copied: "Gekopieerd", pressCopy: "Druk op Ctrl+C om te kopiëren",
+      exitNote: function (q, why) { return "Afslag bij vraag " + q + ": " + why; },
+      summary: function (a, n, t) { return a + " van " + n + " vragen beantwoord in " + t + "."; },
+      doors: { "one-way": "Deur: eenrichting.", "two-way": "Deur: tweerichting.", "unsure": "Deur: weet ik nog niet." },
+      needHttps: "Dicteren werkt alleen via HTTPS. De microfoonknop van je toetsenbord werkt ook.",
+      noSpeech: "Deze browser kan niet dicteren. De microfoonknop van je toetsenbord werkt ook.",
+      listening: "Aan het luisteren", onDevice: " op dit apparaat",
+      tapNextRedo: ". Tik op Volgende als je klaar bent, of op Opnieuw om dit antwoord opnieuw in te spreken.",
+      tapMicStop: ". Tik nog een keer op de microfoon om te stoppen.",
+      cleared: "Gewist. Praat maar verder.",
+      errors: {
+        "not-allowed": "De microfoon is geblokkeerd. Sta hem toe voor deze site in je browserinstellingen.",
+        "no-speech": "Ik hoorde niets. Tik op Dicteer en probeer het opnieuw.",
+        "network": "Dicteren heeft in deze browser een internetverbinding nodig.",
+        "audio-capture": "Geen microfoon gevonden.",
+        "language-not-supported": "Deze browser kan niet in deze taal dicteren."
+      },
+      stopped: function (e) { return "Dicteren gestopt (" + e + ")."; },
+      cantStart: "Dicteren kon niet starten.",
+      mdUntitled: "Naamloze beslissing",
+      mdEarly: function (q, why) { return "Eerder afgerond bij vraag " + q + ": " + why; },
+      mdTime: function (t, a, n) { return "Tijd aan de quest: " + t + ". " + a + " van " + n + " vragen beantwoord."; },
+      mdCall: "## Het besluit", mdAnswers: "## Antwoorden",
+      mdGuide: "Vragen uit The 37signals Guide to Making Decisions van Jason Fried (37signals), onofficieel vertaald: " + GUIDE,
+      mdQuotes: "Citaten uit REWORK “One-way Doors” (37signals), onofficieel vertaald: " + EPISODE
+    }
+  };
+
+  var N = QUESTIONS.en.length;   // 38
+  var END = N + 1;               // station 39 is the verdict
+  var STATIONS = N + 2;          // start + questions + verdict
+  var CARD_W = 540, CARD_H = 610, GAP_X = 140, GAP_Y = 150, PAD = 200;
+  var DEFAULT_LANG = /^nl/i.test(navigator.language || "") ? "nl-NL" : "en-US";
+  var STORE = "decision-quest-v1";
+
+  var state = load() || fresh();
+  function fresh() {
+    return { decision: "", door: "", answers: {}, current: 0, startedAt: null, call: "", callText: "", lang: DEFAULT_LANG, exit: null };
+  }
+  function load() {
+    try { var s = JSON.parse(localStorage.getItem(STORE)); return s && typeof s === "object" ? s : null; } catch (e) { return null; }
+  }
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
+  }
+  if (!state.lang) state.lang = DEFAULT_LANG;
+  if (state.call && CALLS.indexOf(state.call) < 0) state.call = OLD_CALLS[state.call] || "";
+
+  function L() { return /^nl/.test(state.lang) ? "nl" : "en"; }
+  function T() { return TEXT[L()]; }
+  function question(i) { return QUESTIONS[L()][i - 1]; }
+  function exitText(q) { return EXITS[q][L()]; }
+
+  var viewport = document.getElementById("viewport");
+  var world = document.getElementById("world");
+  var pin = document.getElementById("pin");
+  var cards = [];
+  var positions = [];
+  var cam = { x: 0, y: 0, s: 1 };
+  var mode = "focus";
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+
+  // ---------- Station markup ----------
+  var MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  function micButton(target, label) {
+    return '<button class="btn mic" type="button" data-mic="' + target + '" aria-label="' + T().dictate + '">' + MIC + (label ? '<span class="mic-label">' + T().dictate + '</span>' : '') + '</button>';
+  }
+  function micGroup(i) {
+    return '<span class="micbox">' + micButton("a-" + i, true) +
+      '<span class="mic-live" hidden>' +
+      '<button class="btn live-reset" type="button" data-mic-reset>' + T().redo + '</button>' +
+      '<button class="btn live-next" type="button" data-mic-next="' + i + '">' + T().next + '</button>' +
+      '</span></span>';
+  }
+  function choice(name, value, label) {
+    return '<label><input type="radio" name="' + name + '" value="' + value + '"><span>' + esc(label) + '</span></label>';
+  }
+
+  function startHtml() {
+    var t = T();
+    return '<div class="card-top"><span class="n">' + t.start + '</span>' +
+      '<span class="langs" role="radiogroup" aria-label="' + t.langLegend + '">' +
+      '<label><input type="radio" name="lang" value="en-US"><span lang="en">English</span></label>' +
+      '<label><input type="radio" name="lang" value="nl-NL"><span lang="nl">Nederlands</span></label>' +
+      '</span></div>' +
+      '<h1>Make the Call</h1>' +
+      '<p class="lede">' + t.lede + '</p>' +
+      '<label class="field"><span>' + t.whatDeciding + '</span>' +
+      '<div class="input-row"><input type="text" id="decision" placeholder="' + esc(t.decisionPlaceholder) + '" autocomplete="off">' + micButton("decision") + '</div></label>' +
+      '<fieldset class="field"><legend>' + t.doorLegend + '</legend><p class="sources">' + t.doorHelp + '</p><div class="choices">' +
+      choice("door", "one-way", t.doorOne) +
+      choice("door", "two-way", t.doorTwo) +
+      choice("door", "unsure", t.doorUnsure) +
+      '</div></fieldset>' +
+      '<p class="dictation-msg"></p>' +
+      '<div class="card-actions"><button class="btn primary" type="button" data-go="1">' + t.startQuest + '</button><span class="spacer"></span>' +
+      '<button class="btn ghost" type="button" data-reset>' + t.startOver + '</button></div>';
+  }
+  function questionHtml(i) {
+    var t = T(), tip = TIPS[i], x = EXITS[i];
+    return '<div class="card-top"><span class="n">' + i + '</span><span>/ ' + N + '</span><span class="state"></span></div>' +
+      '<h2 class="q">' + esc(question(i)) + '</h2>' +
+      (tip ? '<blockquote class="tip"><p>“' + esc(L() === "nl" ? tip[3] : tip[2]) + '”</p><cite>' + t.cite(tip[0], tip[1]) + '</cite></blockquote>' : '') +
+      '<label class="sr" for="a-' + i + '">' + t.yourAnswer + '</label>' +
+      '<textarea id="a-' + i + '" data-q="' + i + '" placeholder="' + esc(t.answerPlaceholder) + '"></textarea>' +
+      '<p class="dictation-msg"></p>' +
+      (x ? '<button class="btn exit" type="button" data-exit="' + i + '">' + esc(exitText(i)[0]) + ': ' + t.finishNow + '</button><span class="exit-tag">' + t.exitTag + '</span>' : '') +
+      '<div class="card-actions">' +
+      '<button class="btn" type="button" data-go="' + (i - 1) + '">' + t.back + '</button>' + micGroup(i) + '<span class="spacer"></span>' +
+      '<span class="kbd">Ctrl/⌘+Enter</span>' +
+      '<button class="btn primary" type="button" data-next="' + i + '">' + t.skip + '</button></div>';
+  }
+  function endHtml() {
+    var t = T();
+    return '<div class="card-top"><span class="n">' + t.finish + '</span><span class="state"></span></div>' +
+      '<h2 class="q">' + t.makeTheCall + '</h2>' +
+      '<p class="exit-note" id="exitNote"></p>' +
+      '<fieldset class="field"><legend>' + t.whereLand + '</legend><div class="choices">' +
+      CALLS.map(function (k) { return choice("call", k, t.calls[k]); }).join("") +
+      '</div></fieldset>' +
+      '<label class="sr" for="callText">' + t.callLabel + '</label>' +
+      '<textarea id="callText" placeholder="' + esc(t.callPlaceholder) + '"></textarea>' +
+      '<p class="dictation-msg"></p>' +
+      '<p class="summary" id="summary"></p>' +
+      '<div class="card-actions"><button class="btn" type="button" data-go="' + N + '">' + t.back + '</button>' + micButton("callText") + '<span class="spacer"></span>' +
+      '<span class="copied" id="copied" hidden></span>' +
+      '<button class="btn ghost" type="button" data-reset>' + t.startOver + '</button>' +
+      '<button class="btn primary" type="button" id="copy">' + t.copy + '</button></div>' +
+      '<textarea id="copyFallback" class="sr" readonly tabindex="-1" aria-hidden="true"></textarea>';
+  }
+
+  for (var i = 0; i < STATIONS; i++) {
+    var c = document.createElement("article");
+    c.className = "card" + (i === 0 ? " start" : i === END ? " end" : "");
+    c.dataset.i = i;
+    cards.push(c);
+    world.appendChild(c);
+  }
+
+  // Write every text on the page in the current language, then put the user's input back.
+  function render() {
+    var t = T();
+    document.documentElement.lang = L();
+    cards[0].innerHTML = startHtml();
+    for (var q = 1; q <= N; q++) cards[q].innerHTML = questionHtml(q);
+    cards[END].innerHTML = endHtml();
+
+    document.getElementById("timer").title = t.timerTitle;
+    document.getElementById("callBtn").textContent = t.makeCall;
+    pin.textContent = t.pin;
+    document.getElementById("hint").textContent = t.hint;
+    document.getElementById("footShort").innerHTML = t.footShort;
+    document.getElementById("footLong").innerHTML = t.footLong;
+
+    document.getElementById("decision").value = state.decision || "";
+    for (q = 1; q <= N; q++) document.getElementById("a-" + q).value = state.answers[q] || "";
+    document.getElementById("callText").value = state.callText || "";
+    setRadio("door", state.door);
+    setRadio("call", state.call);
+    setRadio("lang", state.lang);
+
+    if (!SR || !window.isSecureContext) {
+      cards[0].querySelector(".dictation-msg").textContent = window.isSecureContext ? t.noSpeech : t.needHttps;
+    }
+  }
+  function setRadio(name, value) {
+    document.querySelectorAll('input[name="' + name + '"]').forEach(function (r) { r.checked = r.value === value; });
+  }
+  function setLanguage(lang) {
+    stopDictation();
+    state.lang = lang;
+    save();
+    var wasMap = mode === "map";
+    render();
+    layout();
+    refresh();
+    if (wasMap) centerOn(worldW / 2, worldH / 2, mapScale(), false); else focusCurrent(false);
+  }
+
+  // ---------- Layout: a winding trail ----------
+  var worldW = 0, worldH = 0;
+  function layout() {
+    var r = viewport.getBoundingClientRect();
+    if (r.width < 640) {
+      CARD_W = Math.round(r.width - 20);
+      CARD_H = Math.round(Math.max(240, r.height - 20));
+    } else {
+      // Make every card as tall as the tallest one needs, so none of them has to scroll.
+      CARD_W = 540;
+      var wasFar = world.classList.contains("far");
+      world.classList.remove("far");
+      var tallest = 0;
+      cards.forEach(function (c) {
+        c.style.width = CARD_W + "px";
+        c.style.height = "auto";
+        tallest = Math.max(tallest, c.offsetHeight);
+      });
+      if (wasFar) world.classList.add("far");
+      CARD_H = Math.max(560, tallest + 48);   // room for a dictation message line
+    }
+    var aspect = Math.max(.4, r.width / Math.max(1, r.height));
+    var cellW = CARD_W + GAP_X, cellH = CARD_H + GAP_Y;
+    var cols = Math.max(3, Math.min(10, Math.round(Math.sqrt(STATIONS * aspect * cellH / cellW))));
+    var rows = Math.ceil(STATIONS / cols);
+    positions = [];
+    for (var k = 0; k < STATIONS; k++) {
+      var row = Math.floor(k / cols), ci = k % cols;
+      var col = row % 2 ? cols - 1 - ci : ci;
+      var x = PAD + col * cellW, y = PAD + row * cellH;
+      positions.push({ x: x, y: y, cx: x + CARD_W / 2, cy: y + CARD_H / 2 });
+      cards[k].style.left = x + "px";
+      cards[k].style.top = y + "px";
+      cards[k].style.width = CARD_W + "px";
+      cards[k].style.height = CARD_H + "px";
+    }
+    worldW = PAD * 2 + cols * cellW - GAP_X;
+    worldH = PAD * 2 + rows * cellH - GAP_Y;
+    world.style.width = worldW + "px";
+    world.style.height = worldH + "px";
+    var svg = document.getElementById("trail");
+    svg.setAttribute("width", worldW);
+    svg.setAttribute("height", worldH);
+    document.getElementById("trailAll").setAttribute("d", pathTo(STATIONS - 1));
+    drawProgress();
+  }
+  function pathTo(last) {
+    var d = "";
+    for (var k = 0; k <= last; k++) d += (k ? " L" : "M") + positions[k].cx + " " + positions[k].cy;
+    return d;
+  }
+  function drawProgress() {
+    var d = state.current > 0 ? pathTo(state.current) : "";
+    if (exitTaken()) d = pathTo(state.exit.from) + " L" + positions[END].cx + " " + positions[END].cy;
+    document.getElementById("trailWalked").setAttribute("d", d);
+    var p = positions[state.current];
+    pin.style.left = p.cx + "px";
+    pin.style.top = (p.y - 30) + "px";
+  }
+
+  // ---------- Camera ----------
+  function view() { var r = viewport.getBoundingClientRect(); return { w: r.width, h: r.height }; }
+  function focusScale() {
+    var v = view();
+    return Math.min(1.1, (v.w - 20) / CARD_W, (v.h - 20) / CARD_H);
+  }
+  function mapScale() {
+    var v = view();
+    return Math.min((v.w - 24) / worldW, (v.h - 24) / worldH);
+  }
+  function apply(animate) {
+    world.classList.toggle("animate", !!animate);
+    world.style.transform = "translate(" + cam.x + "px," + cam.y + "px) scale(" + cam.s + ")";
+    var far = cam.s < focusScale() * 0.6;
+    world.classList.toggle("far", far);
+    viewport.classList.toggle("map", far);
+    mode = far ? "map" : "focus";
+    document.getElementById("zoomBtn").textContent = far ? T().zoomIn : T().zoomOut;
+  }
+  function centerOn(cx, cy, s, animate) {
+    var v = view();
+    cam.s = s;
+    cam.x = v.w / 2 - cx * s;
+    cam.y = v.h / 2 - cy * s;
+    apply(animate);
+  }
+  function focusCurrent(animate) {
+    var p = positions[state.current];
+    centerOn(p.cx, p.cy, focusScale(), animate);
+  }
+  function zoomOut() {
+    centerOn(worldW / 2, worldH / 2, mapScale(), true);
+  }
+
+  // ---------- Navigation ----------
+  function go(k, focusInput) {
+    k = Math.max(0, Math.min(END, k));
+    stopDictation();
+    if (k > 0 && !state.startedAt) state.startedAt = Date.now();
+    state.current = k;
+    save();
+    refresh();
+    focusCurrent(true);
+    if (focusInput !== false) {
+      setTimeout(function () {
+        var t = cards[k].querySelector("textarea:not(.sr), input[type=text]");
+        if (t && window.matchMedia("(pointer: fine)").matches) t.focus({ preventScroll: true });
+        viewport.scrollTop = 0; viewport.scrollLeft = 0;
+      }, 450);
+    }
+  }
+  function next(i) {
+    if (state.exit && i >= state.exit.from) state.exit = null;   // walking on past a shortcut cancels it
+    go(i + 1);
+  }
+  function exitTaken() { return !!state.exit && state.current === END; }
+  function takeExit(q) {
+    var x = EXITS[q];
+    state.exit = { from: q };
+    if (x.call) { state.call = x.call; setRadio("call", x.call); }
+    go(END);
+  }
+
+  // ---------- Render state ----------
+  function answeredCount() {
+    var n = 0;
+    for (var k = 1; k <= N; k++) if ((state.answers[k] || "").trim()) n++;
+    return n;
+  }
+  function refresh() {
+    var t = T();
+    cards.forEach(function (c, k) {
+      c.classList.toggle("current", k === state.current);
+      var answered = k > 0 && k <= N && !!(state.answers[k] || "").trim();
+      c.classList.toggle("answered", answered || (k === 0 && !!state.decision.trim()) || (k === END && !!state.call));
+      var st = c.querySelector(".state");
+      if (k > 0 && k <= N) {
+        var reached = exitTaken() ? state.exit.from : state.current;
+        st.textContent = answered ? t.stateAnswered : (k < reached ? t.stateSkipped : "");
+        c.classList.toggle("skipped", !answered && k < reached);
+        c.classList.toggle("bypassed", !!state.exit && k > state.exit.from);
+        var btn = c.querySelector("[data-next]");
+        btn.textContent = answered ? t.next : t.skip;
+      }
+    });
+    document.getElementById("progress").innerHTML = answeredCount() + " / " + N + '<span class="wide"> ' + t.answered + '</span>';
+    var d = document.getElementById("deciding");
+    d.innerHTML = state.decision.trim() ? t.deciding + " <b>" + esc(state.decision) + "</b>" : "";
+    // 5. Only offer Start over on the start card once there is something to clear
+    cards[0].querySelector("[data-reset]").hidden = !(state.decision.trim() || state.door || answeredCount() || state.call || state.callText.trim());
+    document.getElementById("exitNote").textContent = state.exit ? t.exitNote(state.exit.from, exitText(state.exit.from)[1]) : "";
+    document.getElementById("summary").textContent = t.summary(answeredCount(), N, elapsed()) + " " + doorLine();
+    drawProgress();
+  }
+  function doorLine() {
+    return T().doors[state.door] || "";
+  }
+  function elapsed() {
+    if (!state.startedAt) return "0:00";
+    var s = Math.floor((Date.now() - state.startedAt) / 1000);
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+  function tick() {
+    var t = document.getElementById("timer");
+    t.textContent = elapsed();
+    t.classList.toggle("late", !!state.startedAt && Date.now() - state.startedAt > 5 * 60 * 1000);
+  }
+
+  // ---------- Events ----------
+  world.addEventListener("input", function (e) {
+    var t = e.target;
+    if (t.id === "decision") state.decision = t.value;
+    else if (t.id === "callText") state.callText = t.value;
+    else if (t.dataset.q) state.answers[t.dataset.q] = t.value;
+    else return;
+    save();
+    refresh();
+  });
+  world.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t.name === "door") { state.door = t.value; save(); refresh(); }
+    else if (t.name === "call") { state.call = t.value; save(); refresh(); }
+    else if (t.name === "lang") setLanguage(t.value);
+  });
+
+  var dragMoved = false;
+  world.addEventListener("click", function (e) {
+    if (dragMoved) return;
+    var card = e.target.closest(".card");
+    if (!card) return;
+    var k = +card.dataset.i;
+    if (mode === "map" || k !== state.current) { e.preventDefault(); go(k); return; }
+    var b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.go != null) go(+b.dataset.go);
+    else if (b.dataset.next != null) next(+b.dataset.next);
+    else if (b.dataset.exit != null) takeExit(+b.dataset.exit);
+    else if (b.id === "copy") copySummary();
+    else if (b.hasAttribute("data-reset")) resetQuest(b);
+    else if (b.dataset.mic) toggleDictation(b);
+    else if (b.hasAttribute("data-mic-reset")) { if (recReset) recReset(); }
+    else if (b.dataset.micNext != null) next(+b.dataset.micNext);
+  });
+
+  document.getElementById("zoomBtn").addEventListener("click", function () {
+    if (mode === "map") focusCurrent(true); else zoomOut();
+  });
+  document.getElementById("callBtn").addEventListener("click", function () { go(END); });
+
+  document.addEventListener("keydown", function (e) {
+    var typing = /^(TEXTAREA|INPUT)$/.test(e.target.tagName) && e.target.type !== "radio";
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      if (state.current < END) next(state.current);
+      return;
+    }
+    if (e.key === "Enter" && e.target.id === "decision") { e.preventDefault(); go(1); return; }
+    if (e.key === "Escape" && rec) { stopDictation(); return; }
+    if (e.key === "Escape" && typing) { e.target.blur(); return; }
+    if (typing) return;
+    if (e.key === "z" || e.key === "Z" || e.key === "-") { e.preventDefault(); if (mode === "map") focusCurrent(true); else zoomOut(); }
+    else if (e.key === "Enter" || e.key === "+" || e.key === "=") { if (mode === "map") { e.preventDefault(); focusCurrent(true); } }
+    else if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); go(state.current + 1, false); }
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); go(state.current - 1, false); }
+  });
+
+  // Drag to pan while zoomed out, wheel or trackpad pinch to zoom anywhere.
+  var drag = null;
+  viewport.addEventListener("pointerdown", function (e) {
+    dragMoved = false;
+    if (mode !== "map" && e.target.closest(".card.current")) return;
+    if (mode !== "map" && e.pointerType === "touch") return;
+    if (e.target.closest("button, a, input, textarea, label")) return;
+    drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, id: e.pointerId };
+  });
+  window.addEventListener("pointermove", function (e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!dragMoved && Math.abs(dx) + Math.abs(dy) < 6) return;
+    dragMoved = true;
+    viewport.classList.add("dragging");
+    cam.x = drag.cx + dx; cam.y = drag.cy + dy;
+    apply(false);
+  });
+  window.addEventListener("pointerup", function () {
+    drag = null;
+    viewport.classList.remove("dragging");
+    setTimeout(function () { dragMoved = false; }, 0);
+  });
+  viewport.addEventListener("wheel", function (e) {
+    if (mode !== "map" && !e.ctrlKey && e.target.closest(".card.current")) return;
+    e.preventDefault();
+    var r = viewport.getBoundingClientRect();
+    var px = e.clientX - r.left, py = e.clientY - r.top;
+    var min = mapScale() * 0.8, max = focusScale() * 1.3;
+    var ns = Math.max(min, Math.min(max, cam.s * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))));
+    cam.x = px - (px - cam.x) * (ns / cam.s);
+    cam.y = py - (py - cam.y) * (ns / cam.s);
+    cam.s = ns;
+    apply(false);
+  }, { passive: false });
+  viewport.addEventListener("scroll", function () { viewport.scrollTop = 0; viewport.scrollLeft = 0; });
+
+  var resizeTimer;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      var wasMap = mode === "map";
+      layout();
+      if (wasMap) { cam.s = mapScale(); centerOn(worldW / 2, worldH / 2, cam.s, false); } else focusCurrent(false);
+    }, 120);
+  });
+
+  // ---------- Export ----------
+  function markdown() {
+    var t = T();
+    var out = ["# " + (state.decision.trim() || t.mdUntitled), ""];
+    if (doorLine()) out.push(doorLine());
+    if (state.exit) out.push(t.mdEarly(state.exit.from, exitText(state.exit.from)[1]));
+    out.push(t.mdTime(elapsed(), answeredCount(), N), "");
+    if (state.call || state.callText.trim()) {
+      out.push(t.mdCall, "");
+      if (state.call) out.push("**" + t.calls[state.call] + ".** " + state.callText.trim()); else out.push(state.callText.trim());
+      out.push("");
+    }
+    out.push(t.mdAnswers, "");
+    for (var k = 1; k <= N; k++) {
+      var a = (state.answers[k] || "").trim();
+      if (a) out.push("**" + k + ". " + question(k) + "**", "", a, "");
+    }
+    out.push(t.mdGuide);
+    for (var q in TIPS) if ((state.answers[q] || "").trim()) { out.push(t.mdQuotes); break; }
+    return out.join("\n");
+  }
+  function copySummary() {
+    var t = T();
+    var text = markdown();
+    var shown = document.getElementById("copied");
+    function done(msg) { shown.textContent = msg; shown.hidden = false; setTimeout(function () { shown.hidden = true; }, 2200); }
+    function fallback() {
+      var f = document.getElementById("copyFallback");
+      f.value = text; f.select();
+      try { document.execCommand("copy") ? done(t.copied) : done(t.pressCopy); } catch (e) { done(t.pressCopy); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(t.copied); }, fallback);
+    else fallback();
+  }
+
+  var resetArmed = null;
+  function resetQuest(b) {
+    if (!resetArmed) {
+      b.textContent = T().clearAll;
+      resetArmed = setTimeout(function () { b.textContent = T().startOver; resetArmed = null; }, 3000);
+      return;
+    }
+    clearTimeout(resetArmed); resetArmed = null;
+    var lang = state.lang;
+    state = fresh();
+    state.lang = lang;
+    save();
+    render();
+    go(0);
+  }
+
+  // ---------- Dictation (Web Speech API, on-device when the browser offers it) ----------
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var rec = null, recBtn = null, recReset = null;
+  if (!SR || !window.isSecureContext) document.body.classList.add("no-speech");
+
+  function say(btn, msg) {
+    var m = btn.closest(".card").querySelector(".dictation-msg");
+    if (m) m.textContent = msg || "";
+  }
+  function setListening(btn, on) {
+    var t = T();
+    var box = btn.closest(".micbox");
+    if (box) {
+      btn.hidden = on;
+      box.querySelector(".mic-live").hidden = !on;
+    }
+    btn.classList.toggle("listening", on);
+    var l = btn.querySelector(".mic-label");
+    if (l) l.textContent = on ? t.stop : t.dictate;
+    btn.setAttribute("aria-label", on ? t.stopDictation : t.dictate);
+  }
+  function stopDictation() {
+    if (rec) { try { rec.stop(); } catch (e) {} }
+  }
+  function toggleDictation(btn) {
+    if (rec) { var same = recBtn === btn; stopDictation(); if (same) return; }
+    startDictation(btn, true);
+  }
+  function startDictation(btn, tryLocal) {
+    var t = T();
+    var field = document.getElementById(btn.dataset.mic);
+    var r = new SR();
+    r.lang = state.lang || DEFAULT_LANG;
+    r.continuous = true;
+    r.interimResults = true;
+    var local = false;
+    if (tryLocal && "processLocally" in r) { r.processLocally = true; local = true; }
+    var base = field.value.replace(/\s+$/, "");
+    if (base) base += " ";
+    var from = 0, seen = 0;   // results before `from` were thrown away with Reset
+    rec = r; recBtn = btn;
+    recReset = function () {
+      from = seen;
+      field.value = base.replace(/\s+$/, "");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      say(btn, t.cleared);
+    };
+    setListening(btn, true);
+    say(btn, t.listening + (local ? t.onDevice : "") + (btn.closest(".micbox") ? t.tapNextRedo : t.tapMicStop));
+    r.onresult = function (e) {
+      seen = e.results.length;
+      var text = "";
+      for (var k = from; k < e.results.length; k++) text += e.results[k][0].transcript;
+      field.value = base + text.replace(/^\s+/, "");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    r.onerror = function (e) {
+      if (local && (e.error === "language-not-supported" || e.error === "service-not-allowed")) {
+        // No on-device model for this language: fall back to the browser's own speech service.
+        r.onend = null; rec = null; setListening(btn, false);
+        startDictation(btn, false);
+        return;
+      }
+      say(btn, t.errors[e.error] || t.stopped(e.error));
+      btn.dataset.err = "1";
+    };
+    r.onend = function () {
+      if (rec === r) { rec = null; recBtn = null; recReset = null; }
+      setListening(btn, false);
+      if (!btn.dataset.err) say(btn, "");
+      delete btn.dataset.err;
+    };
+    try { r.start(); } catch (e) { rec = null; setListening(btn, false); say(btn, t.cantStart); }
+  }
+
+  // ---------- Boot ----------
+  render();
+  layout();
+  refresh();
+  focusCurrent(false);
+  requestAnimationFrame(function () { world.classList.add("animate"); });
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>
