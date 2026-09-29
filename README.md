@@ -16,7 +16,7 @@ Sixteen of the questions come with a quote from Jason Fried or David Heinemeier 
 
 Some questions settle it on their own. Answer "no" to "Does a decision actually need to be made here?" and there's nothing left to do. Eight questions like that have a shortcut straight to the finish, which notes why you ended up there and fills in the call where the answer makes it obvious.
 
-At the finish you pick where you landed (do it, don't, no decision needed, hand it to someone else, decide later), write the call in one sentence and copy everything as Markdown.
+At the finish you pick where you landed (do it, don't, no decision needed, hand it to someone else, decide later), write the call in one sentence and copy everything as Markdown. Or copy a share link: all your answers are packed into the URL itself, so whoever opens it sees your decision read-only, without anything being stored on a server.
 
 A timer runs in the corner. Jason and David say most of their calls take about five minutes, so it underlines itself when you pass that.
 

@@ -115,6 +115,10 @@
   .card-actions { display: flex; gap: 8px; align-items: center; margin-top: auto; }
   .card-actions .spacer { flex: 1; }
   .card.end .card-actions { flex-wrap: wrap; }
+  .card-top .reset-link { margin-left: auto; min-height: 0; padding: 0; font-size: 14px; }
+  /* Viewing someone else's shared decision: read-only */
+  .shared-note { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
+  .shared .mic, .shared .micbox, .shared .btn.exit, .shared [data-reset], .shared #timer { display: none !important; }
   .kbd { font: 500 11px/1 var(--mono); color: var(--muted); }
 
   /* Shortcuts to the finish */
@@ -210,6 +214,7 @@
     .stats { order: 3; gap: 10px; font-size: 12px; }
     .stats .wide { display: none; }
     .deciding { order: 4; flex: 1 1 0; font-size: 13px; }
+    .shared-note { order: 5; flex-basis: 100%; justify-content: space-between; font-size: 13px; }
     .hint { display: none; }
     .tools .btn { padding: 6px 10px; }
     .card { padding: 20px 18px 16px; gap: 12px; }
@@ -238,6 +243,7 @@
     <span id="progress">0 / 38 answered</span>
     <span id="timer" title="Jason and David say most of their calls take about five minutes">0:00</span>
   </div>
+  <div class="shared-note" id="sharedNote" hidden><span id="sharedText"></span><button class="btn" id="ownBtn" type="button"></button></div>
   <div class="tools">
     <button class="btn" id="zoomBtn" type="button">Zoom out</button>
     <button class="btn" id="callBtn" type="button">Make the call</button>
@@ -462,6 +468,8 @@
       callLabel: "The call, in one sentence",
       callPlaceholder: "The call, in one sentence. And what would make you change it.",
       copy: "Copy as Markdown", copied: "Copied", pressCopy: "Press Ctrl+C to copy",
+      share: "Copy share link", linkCopied: "Link copied",
+      sharedNote: "A shared decision, read-only.", startOwn: "Start your own",
       exitNote: function (q, why) { return "Shortcut from question " + q + ": " + why; },
       summary: function (a, n, t) { return a + " of " + n + " questions answered in " + t + "."; },
       doors: { "one-way": "Door: one-way.", "two-way": "Door: two-way.", "unsure": "Door: not sure." },
@@ -518,6 +526,8 @@
       callLabel: "Het besluit, in één zin",
       callPlaceholder: "Het besluit in één zin. En wat je van gedachten zou doen veranderen.",
       copy: "Kopieer als Markdown", copied: "Gekopieerd", pressCopy: "Druk op Ctrl+C om te kopiëren",
+      share: "Kopieer deellink", linkCopied: "Link gekopieerd",
+      sharedNote: "Een gedeelde beslissing, alleen lezen.", startOwn: "Begin je eigen",
       exitNote: function (q, why) { return "Afslag bij vraag " + q + ": " + why; },
       summary: function (a, n, t) { return a + " van " + n + " vragen beantwoord in " + t + "."; },
       doors: { "one-way": "Deur: eenrichting.", "two-way": "Deur: tweerichting.", "unsure": "Deur: weet ik nog niet." },
@@ -559,7 +569,9 @@
   function load() {
     try { var s = JSON.parse(localStorage.getItem(STORE)); return s && typeof s === "object" ? s : null; } catch (e) { return null; }
   }
+  var sharedMode = false, sharedElapsed = 0;
   function save() {
+    if (sharedMode) return;
     try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
   }
   if (!state.lang) state.lang = DEFAULT_LANG;
@@ -634,7 +646,7 @@
   }
   function endHtml() {
     var t = T();
-    return '<div class="card-top"><span class="n">' + t.finish + '</span><span class="state"></span></div>' +
+    return '<div class="card-top"><span class="n">' + t.finish + '</span><button class="btn ghost reset-link" type="button" data-reset>' + t.startOver + '</button></div>' +
       '<h2 class="q">' + t.makeTheCall + '</h2>' +
       '<p class="exit-note" id="exitNote"></p>' +
       '<fieldset class="field"><legend>' + t.whereLand + '</legend><div class="choices">' +
@@ -646,7 +658,7 @@
       '<p class="summary" id="summary"></p>' +
       '<div class="card-actions"><button class="btn" type="button" data-go="' + N + '">' + t.back + '</button>' + micButton("callText") + '<span class="spacer"></span>' +
       '<span class="copied" id="copied" hidden></span>' +
-      '<button class="btn ghost" type="button" data-reset>' + t.startOver + '</button>' +
+      '<button class="btn" type="button" id="share">' + t.share + '</button>' +
       '<button class="btn primary" type="button" id="copy">' + t.copy + '</button></div>' +
       '<textarea id="copyFallback" class="sr" readonly tabindex="-1" aria-hidden="true"></textarea>';
   }
@@ -681,6 +693,7 @@
     setRadio("call", state.call);
     setRadio("lang", state.lang);
 
+    if (sharedMode) enterSharedMode();
     if (!SR || !window.isSecureContext) {
       cards[0].querySelector(".dictation-msg").textContent = window.isSecureContext ? t.noSpeech : t.needHttps;
     }
@@ -850,6 +863,7 @@
     // 5. Only offer Start over on the start card once there is something to clear
     cards[0].querySelector("[data-reset]").hidden = !(state.decision.trim() || state.door || answeredCount() || state.call || state.callText.trim());
     document.getElementById("exitNote").textContent = state.exit ? t.exitNote(state.exit.from, exitText(state.exit.from)[1]) : "";
+    updateShare();
     document.getElementById("summary").textContent = t.summary(answeredCount(), N, elapsed()) + " " + doorLine();
     drawProgress();
   }
@@ -857,8 +871,8 @@
     return T().doors[state.door] || "";
   }
   function elapsed() {
-    if (!state.startedAt) return "0:00";
-    var s = Math.floor((Date.now() - state.startedAt) / 1000);
+    if (!sharedMode && !state.startedAt) return "0:00";
+    var s = sharedMode ? sharedElapsed : Math.floor((Date.now() - state.startedAt) / 1000);
     return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
   }
   function tick() {
@@ -896,7 +910,8 @@
     if (b.dataset.go != null) go(+b.dataset.go);
     else if (b.dataset.next != null) next(+b.dataset.next);
     else if (b.dataset.exit != null) takeExit(+b.dataset.exit);
-    else if (b.id === "copy") copySummary();
+    else if (b.id === "copy") copyText(markdown(), T().copied);
+    else if (b.id === "share") copyText(shareUrl || location.href, T().linkCopied);
     else if (b.hasAttribute("data-reset")) resetQuest(b);
     else if (b.dataset.mic) toggleDictation(b);
     else if (b.hasAttribute("data-mic-reset")) { if (recReset) recReset(); }
@@ -993,19 +1008,88 @@
     for (var q in TIPS) if ((state.answers[q] || "").trim()) { out.push(t.mdQuotes); break; }
     return out.join("\n");
   }
-  function copySummary() {
+  function copyText(text, okMsg) {
     var t = T();
-    var text = markdown();
     var shown = document.getElementById("copied");
     function done(msg) { shown.textContent = msg; shown.hidden = false; setTimeout(function () { shown.hidden = true; }, 2200); }
     function fallback() {
       var f = document.getElementById("copyFallback");
       f.value = text; f.select();
-      try { document.execCommand("copy") ? done(t.copied) : done(t.pressCopy); } catch (e) { done(t.pressCopy); }
+      try { document.execCommand("copy") ? done(okMsg) : done(t.pressCopy); } catch (e) { done(t.pressCopy); }
     }
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(t.copied); }, fallback);
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(okMsg); }, fallback);
     else fallback();
   }
+
+  // ---------- Share link: the whole decision packed into the URL, nothing stored on a server ----------
+  var shareUrl = "", shareTimer = null;
+  function b64u(bytes) {
+    var s = "";
+    for (var k = 0; k < bytes.length; k++) s += String.fromCharCode(bytes[k]);
+    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function unb64u(str) {
+    var s = atob(str.replace(/-/g, "+").replace(/_/g, "/")), b = new Uint8Array(s.length);
+    for (var k = 0; k < s.length; k++) b[k] = s.charCodeAt(k);
+    return b;
+  }
+  function pipe(bytes, stream) {
+    return new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer().then(function (buf) { return new Uint8Array(buf); });
+  }
+  function encodeShare(obj) {
+    var bytes = new TextEncoder().encode(JSON.stringify(obj));
+    if (window.CompressionStream) return pipe(bytes, new CompressionStream("deflate-raw")).then(function (z) { return "z" + b64u(z); });
+    return Promise.resolve("j" + b64u(bytes));
+  }
+  function decodeShare(code) {
+    var bytes = unb64u(code.slice(1));
+    var p = code[0] === "z" ? pipe(bytes, new DecompressionStream("deflate-raw")) : Promise.resolve(bytes);
+    return p.then(function (b) { return JSON.parse(new TextDecoder().decode(b)); });
+  }
+  function sharePayload() {
+    var a = {};
+    for (var k = 1; k <= N; k++) if ((state.answers[k] || "").trim()) a[k] = state.answers[k].trim();
+    var secs = sharedMode ? sharedElapsed : (state.startedAt ? Math.floor((Date.now() - state.startedAt) / 1000) : 0);
+    return { v: 1, d: state.decision, o: state.door, a: a, c: state.call, t: state.callText, x: state.exit ? state.exit.from : 0, l: state.lang, e: secs };
+  }
+  function stateFromPayload(p) {
+    var st = fresh();
+    st.decision = String(p.d || "");
+    st.door = ["one-way", "two-way", "unsure"].indexOf(p.o) >= 0 ? p.o : "";
+    for (var k in (p.a || {})) if (+k >= 1 && +k <= N) st.answers[k] = String(p.a[k]);
+    st.call = CALLS.indexOf(p.c) >= 0 ? p.c : "";
+    st.callText = String(p.t || "");
+    st.exit = EXITS[p.x] ? { from: +p.x } : null;
+    st.lang = p.l === "nl-NL" ? "nl-NL" : "en-US";
+    st.current = END;
+    return st;
+  }
+  function updateShare() {
+    clearTimeout(shareTimer);
+    shareTimer = setTimeout(function () {
+      encodeShare(sharePayload()).then(function (code) {
+        shareUrl = location.origin + location.pathname + "#share=" + code;
+      }, function () { shareUrl = ""; });
+    }, 250);
+  }
+  function enterSharedMode() {
+    document.body.classList.add("shared");
+    world.querySelectorAll("input, textarea").forEach(function (el) {
+      if (el.name === "lang" || el.id === "copyFallback") return;
+      if (el.type === "radio") el.disabled = true; else el.readOnly = true;
+    });
+    var t = T();
+    document.getElementById("sharedNote").hidden = false;
+    document.getElementById("sharedText").textContent = t.sharedNote;
+    document.getElementById("ownBtn").textContent = t.startOwn;
+  }
+  document.getElementById("ownBtn").addEventListener("click", function () {
+    history.replaceState(null, "", location.pathname);
+    location.reload();
+  });
+  window.addEventListener("hashchange", function () {
+    if (location.hash.indexOf("#share=") === 0) location.reload();
+  });
 
   var resetArmed = null;
   function resetQuest(b) {
@@ -1099,13 +1183,24 @@
   }
 
   // ---------- Boot ----------
-  render();
-  layout();
-  refresh();
-  focusCurrent(false);
-  requestAnimationFrame(function () { world.classList.add("animate"); });
-  tick();
-  setInterval(tick, 1000);
+  function start() {
+    render();
+    layout();
+    refresh();
+    focusCurrent(false);
+    requestAnimationFrame(function () { world.classList.add("animate"); });
+    tick();
+    setInterval(tick, 1000);
+  }
+  if (location.hash.indexOf("#share=") === 0) {
+    decodeShare(location.hash.slice(7)).then(function (p) {
+      sharedMode = true;
+      sharedElapsed = +p.e || 0;
+      state = stateFromPayload(p);
+    }).catch(function () {}).then(start);
+  } else {
+    start();
+  }
 })();
 </script>
 </body>
