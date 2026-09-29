@@ -173,7 +173,6 @@
   .sources { font-size: 12px; color: var(--muted); margin: 0; }
   .sources a { color: inherit; }
   .card.end .summary { font: 500 13px/1.4 var(--mono); color: var(--muted); margin: 0; }
-  .copied { font-size: 14px; font-weight: 600; }
 
   /* Zoomed out: cards become map tiles */
   .far .card { padding: 40px; overflow: hidden; border: 6px solid var(--line); gap: 24px; }
@@ -657,8 +656,7 @@
       '<p class="dictation-msg"></p>' +
       '<p class="summary" id="summary"></p>' +
       '<div class="card-actions"><button class="btn" type="button" data-go="' + N + '">' + t.back + '</button>' + micButton("callText") + '<span class="spacer"></span>' +
-      '<span class="copied" id="copied" hidden></span>' +
-      '<button class="btn" type="button" id="share">' + t.share + '</button>' +
+            '<button class="btn" type="button" id="share">' + t.share + '</button>' +
       '<button class="btn primary" type="button" id="copy">' + t.copy + '</button></div>' +
       '<textarea id="copyFallback" class="sr" readonly tabindex="-1" aria-hidden="true"></textarea>';
   }
@@ -910,8 +908,8 @@
     if (b.dataset.go != null) go(+b.dataset.go);
     else if (b.dataset.next != null) next(+b.dataset.next);
     else if (b.dataset.exit != null) takeExit(+b.dataset.exit);
-    else if (b.id === "copy") copyText(markdown(), T().copied);
-    else if (b.id === "share") copyText(shareUrl || location.href, T().linkCopied);
+    else if (b.id === "copy") copyText(markdown(), T().copied, b);
+    else if (b.id === "share") copyText(shareUrl || location.href, T().linkCopied, b);
     else if (b.hasAttribute("data-reset")) resetQuest(b);
     else if (b.dataset.mic) toggleDictation(b);
     else if (b.hasAttribute("data-mic-reset")) { if (recReset) recReset(); }
@@ -1008,10 +1006,20 @@
     for (var q in TIPS) if ((state.answers[q] || "").trim()) { out.push(t.mdQuotes); break; }
     return out.join("\n");
   }
-  function copyText(text, okMsg) {
+  // Confirm inside the button itself, at its current width, so nothing around it moves.
+  function copyText(text, okMsg, btn) {
     var t = T();
-    var shown = document.getElementById("copied");
-    function done(msg) { shown.textContent = msg; shown.hidden = false; setTimeout(function () { shown.hidden = true; }, 2200); }
+    function done(msg) {
+      if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+      btn.style.minWidth = btn.offsetWidth + "px";
+      btn.textContent = msg;
+      clearTimeout(btn._restore);
+      btn._restore = setTimeout(function () {
+        btn.textContent = btn.dataset.label;
+        delete btn.dataset.label;
+        btn.style.minWidth = "";
+      }, 2000);
+    }
     function fallback() {
       var f = document.getElementById("copyFallback");
       f.value = text; f.select();
