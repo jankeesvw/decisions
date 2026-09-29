@@ -180,13 +180,14 @@
   .far .card .field, .far .card .sources, .far .card .summary, .far .card .dictation-msg,
   .far .card .btn.exit, .far .card .exit-note { display: none; }
   .far .card-top { font-size: 30px; color: inherit; }
-  .far .card-top > span:not(.n) { display: none; }
-  .far .card-top .n { font: 800 150px/.9 var(--display); color: inherit; letter-spacing: -.04em; }
-  .far .q { font-size: 58px; line-height: 1.1; letter-spacing: -.02em;
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 7; overflow: hidden; }
-  .far .card.start h1 { font-size: 80px; }
-  .far .exit-tag { font-size: 40px; }
-  .far .card:has(.exit-tag) .q { -webkit-line-clamp: 5; }
+  .far .card-top > :not(.n) { display: none !important; }
+  /* Sizes come from layout(), which fits them to the current card size */
+  .far .card-top .n { font: 800 var(--far-n, 150px)/.9 var(--display); color: inherit; letter-spacing: -.04em; }
+  .far .q { font-size: var(--far-q, 58px); line-height: 1.1; letter-spacing: -.02em; text-wrap: pretty;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--far-lines, 7); overflow: hidden; }
+  .far .card.start h1 { font-size: var(--far-h1, 80px); line-height: 1; }
+  .far .exit-tag { font-size: var(--far-tag, 40px); line-height: 1.1; }
+  .far .card:has(.exit-tag) .q { -webkit-line-clamp: var(--far-lines-exit, 5); }
   /* Answered: solid black. Skipped: dashed. Not reached yet: light grey outline. */
   .far .card.answered { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .far .card.skipped { border-style: dashed; border-color: var(--muted); }
@@ -746,6 +747,20 @@
       cards[k].style.width = CARD_W + "px";
       cards[k].style.height = CARD_H + "px";
     }
+    // Zoomed-out tiles: size the number and question to this card, and only show whole lines.
+    var farPad = 40 + 6, farGap = 24;
+    var numSize = Math.round(Math.min(150, CARD_W * 0.27, CARD_H * 0.2));
+    var tagSize = Math.round(Math.max(24, Math.min(40, CARD_W * 0.075)));
+    var room = CARD_H - farPad * 2 - numSize * 0.9 - farGap;
+    var qSize = Math.round(Math.max(28, Math.min(58, CARD_W * 0.105, room / (6 * 1.1))));   // aim for six lines
+    var lines = Math.max(2, Math.floor(room / (qSize * 1.1)));
+    var linesExit = Math.max(2, Math.floor((room - tagSize * 1.1 - farGap) / (qSize * 1.1)));
+    world.style.setProperty("--far-n", numSize + "px");
+    world.style.setProperty("--far-q", qSize + "px");
+    world.style.setProperty("--far-h1", Math.round(qSize * 1.4) + "px");
+    world.style.setProperty("--far-tag", tagSize + "px");
+    world.style.setProperty("--far-lines", lines);
+    world.style.setProperty("--far-lines-exit", linesExit);
     worldW = PAD * 2 + cols * cellW - GAP_X;
     worldH = PAD * 2 + rows * cellH - GAP_Y;
     world.style.width = worldW + "px";
